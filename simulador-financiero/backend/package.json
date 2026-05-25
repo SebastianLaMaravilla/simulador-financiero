@@ -4,8 +4,8 @@
   "description": "API en Node.js + Express + MongoDB para el simulador financiero",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node src/server.js",
-    "start": "node src/server.js"
+  "start": "node src/server.js",
+  "dev": "node src/server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
