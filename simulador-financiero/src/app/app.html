@@ -1,0 +1,241 @@
+<div class="page-shell">
+  <section *ngIf="cargandoAuth" class="loading-screen">
+    <div class="spinner"></div>
+    <p>Cargando aplicación...</p>
+  </section>
+
+  <section *ngIf="!cargandoAuth && !usuario" class="login-screen">
+    <div class="login-card">
+      <div class="login-badge">💰</div>
+      <h1>Simulador Financiero</h1>
+      <p class="muted">Ejercicio 2 · Sebastian Perez &amp; Tatiana Ortega</p>
+      <p class="lead">
+        Calcula préstamos, guarda cada simulación en MySQL y visualiza el comportamiento del crédito con Firebase Auth.
+      </p>
+
+      <button type="button" class="btn-google" (click)="login()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" />
+        Iniciar sesión con Google
+      </button>
+    </div>
+  </section>
+
+  <section *ngIf="!cargandoAuth && usuario" class="app-shell">
+    <header class="topbar">
+      <div>
+        <span class="brand">Simulador Financiero</span>
+        <p class="muted small">Multiusuario · Firebase Auth · MySQL · Chart.js</p>
+      </div>
+
+      <nav class="menu">
+        <button type="button" [class.active]="vistaActiva === 'simulador'" (click)="cambiarVista('simulador')">Simulador</button>
+        <button type="button" [class.active]="vistaActiva === 'historial'" (click)="cambiarVista('historial')">Historial</button>
+        <button type="button" [class.active]="vistaActiva === 'graficas'" (click)="cambiarVista('graficas')">Gráficas</button>
+        <button type="button" [class.active]="vistaActiva === 'api'" (click)="cambiarVista('api')">API</button>
+      </nav>
+
+      <div class="user-chip">
+        <img [src]="usuario.photoURL || 'https://via.placeholder.com/40'" alt="Avatar" class="avatar" />
+        <div>
+          <strong>{{ usuario.displayName || 'Usuario' }}</strong>
+          <p class="muted small">{{ usuario.email }}</p>
+        </div>
+        <button type="button" class="btn-logout" (click)="logout()">Salir</button>
+      </div>
+    </header>
+
+    <section class="dashboard-grid">
+      <article class="stat-card">
+        <span class="stat-label">Nombre</span>
+        <strong>{{ usuario.displayName || 'Usuario' }}</strong>
+      </article>
+
+      <article class="stat-card">
+        <span class="stat-label">Correo</span>
+        <strong>{{ usuario.email }}</strong>
+      </article>
+
+      <article class="stat-card" *ngIf="reporte">
+        <span class="stat-label">Último registro</span>
+        <strong>{{ reporte.ultimo_registro ? (reporte.ultimo_registro | date:'dd/MM/yyyy HH:mm') : 'Sin registros' }}</strong>
+      </article>
+
+      <article class="stat-card" *ngIf="reporte">
+        <span class="stat-label">Total simulaciones</span>
+        <strong>{{ reporte.total_registros }}</strong>
+      </article>
+    </section>
+
+    <main class="content-grid">
+      <section class="panel" *ngIf="vistaActiva === 'simulador'">
+        <h2>Nueva simulación</h2>
+
+        <div class="form-grid">
+          <label>
+            Monto
+            <input type="number" min="0" [(ngModel)]="monto" placeholder="Ej: 5000000" />
+          </label>
+
+          <label>
+            Tasa mensual (%)
+            <input type="number" min="0" step="0.1" [(ngModel)]="tasaMensual" placeholder="Ej: 2.5" />
+          </label>
+
+          <label>
+            Plazo (meses)
+            <input type="number" min="1" [(ngModel)]="meses" placeholder="Ej: 12" />
+          </label>
+        </div>
+
+        <p class="warning" *ngIf="monto <= 0 || tasaMensual <= 0 || meses <= 0">
+          Completa monto, tasa y plazo para activar el cálculo.
+        </p>
+
+        <button
+          type="button"
+          class="btn-primary primary-action"
+          (click)="calcular()"
+          [disabled]="monto <= 0 || tasaMensual <= 0 || meses <= 0"
+          style="margin-top: 18px; width: 100%; min-height: 50px; padding: 14px 18px; font-size: 16px; font-weight: 800;">
+          Calcular y guardar
+        </button>
+      </section>
+
+      <section class="panel results" *ngIf="calculado">
+        <h2>Resultados</h2>
+
+        <div class="results-grid">
+          <article class="result-box">
+            <span>Interés total</span>
+            <strong>$ {{ interesTotal | number:'1.2-2' }}</strong>
+          </article>
+
+          <article class="result-box highlighted">
+            <span>Total a pagar</span>
+            <strong>$ {{ totalPagar | number:'1.2-2' }}</strong>
+          </article>
+
+          <article class="result-box">
+            <span>Cuota mensual</span>
+            <strong>$ {{ cuotaMensual | number:'1.2-2' }}</strong>
+          </article>
+
+          <article class="result-box">
+            <span>Riesgo</span>
+            <strong class="badge" [ngClass]="riesgoClase">{{ riesgo }}</strong>
+          </article>
+        </div>
+
+        <div class="notice" *ngIf="comparacionCuota">
+          {{ comparacionCuota }}
+        </div>
+
+        <div class="notice warning" *ngIf="simulacionMayorInteres">
+          Mayor interés histórico: $ {{ simulacionMayorInteres?.interes_total | number:'1.2-2' }}
+        </div>
+      </section>
+
+      <section class="panel" *ngIf="vistaActiva === 'historial'">
+        <h2>Historial de simulaciones</h2>
+
+        <div class="table-wrap" *ngIf="historial.length > 0; else emptyHistory">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Monto</th>
+                <th>Tasa</th>
+                <th>Meses</th>
+                <th>Interés</th>
+                <th>Cuota</th>
+                <th>Riesgo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let s of historial" [class.highlight-row]="s.id === simulacionMayorInteres?.id">
+                <td>{{ s.created_at ? (s.created_at | date:'dd/MM/yyyy HH:mm') : '-' }}</td>
+                <td>$ {{ s.monto | number:'1.2-2' }}</td>
+                <td>{{ s.tasa_mensual }}%</td>
+                <td>{{ s.meses }}</td>
+                <td>$ {{ s.interes_total | number:'1.2-2' }}</td>
+                <td>$ {{ s.cuota_mensual | number:'1.2-2' }}</td>
+                <td>
+                  <span class="badge"
+                        [ngClass]="s.riesgo === 'Bajo riesgo' ? 'bajo' : (s.riesgo === 'Riesgo medio' ? 'medio' : 'alto')">
+                    {{ s.riesgo }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ng-template #emptyHistory>
+          <p class="empty">Aún no hay simulaciones guardadas.</p>
+        </ng-template>
+
+        <div class="mini-stats" *ngIf="historial.length > 0">
+          <article class="mini-card">
+            <span>Promedio cuota</span>
+            <strong>$ {{ promedioCuota | number:'1.2-2' }}</strong>
+          </article>
+          <article class="mini-card">
+            <span>Total simulaciones</span>
+            <strong>{{ historial.length }}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel charts-panel" *ngIf="vistaActiva === 'graficas'">
+        <div class="chart-card" *ngIf="calculado">
+          <h2>Simulación actual</h2>
+          <canvas id="graficaCircular"></canvas>
+          <canvas id="graficaLinea"></canvas>
+        </div>
+
+        <div class="chart-card" *ngIf="historial.length > 0">
+          <h2>Histórico</h2>
+          <canvas id="graficaCircularHistorial"></canvas>
+          <canvas id="graficaLineaHistorial"></canvas>
+        </div>
+
+        <p class="empty" *ngIf="!calculado">Realiza una simulación para ver la gráfica actual.</p>
+        <p class="empty" *ngIf="historial.length === 0">Guarda simulaciones para visualizar el histórico.</p>
+      </section>
+
+      <section class="panel" *ngIf="vistaActiva === 'api'">
+        <h2>API de tasas de referencia</h2>
+        <p class="muted">Mock API lista para reemplazar por una API real cuando necesites tasas del mercado.</p>
+
+        <div class="table-wrap" *ngIf="tasasMercado.length > 0; else loadingRates">
+          <table>
+            <thead>
+              <tr>
+                <th>Entidad</th>
+                <th>Tasa mensual</th>
+                <th>Tipo</th>
+                <th>Moneda</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of tasasMercado">
+                <td>{{ t.entidad }}</td>
+                <td>{{ t.tasa_mensual }}%</td>
+                <td>{{ t.tipo }}</td>
+                <td>{{ t.moneda }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ng-template #loadingRates>
+          <p class="empty">Cargando datos...</p>
+        </ng-template>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Simulador Financiero — Sebastian Perez &amp; Tatiana Ortega</p>
+    </footer>
+  </section>
+</div>
